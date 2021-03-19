@@ -32,7 +32,7 @@ app.post("/init", (req, res) => {
 A user sends the username of the person he wants to connect to
 {username}
 
-and receives the person's
+and receives the person's{identityKey, preKey, preKeySig, oneTimePreKey}
 Identity key IKB
 Signed prekey SPKB
 Prekey signature Sig(IKB, Encode(SPKB))
@@ -56,6 +56,9 @@ An initial ciphertext encrypted with some AEAD encryption scheme [4] using AD as
 */
 app.post("/initiate", (req, res) => {});
 
+/*
+{username:, toUser:, message:}
+*/
 app.post("/sendMessage", (req, res) => {});
 
 /*
