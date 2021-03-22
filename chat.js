@@ -3,8 +3,8 @@ const axios = require("axios");
 const helper = require("./helper");
 const messenger = require("./messenger");
 
-let username, identityKey, preKey, signOfPreKey, oneTimePreKeys;
 let messengers = {};
+let myDetails = {};
 
 const readline = require("readline").createInterface({
     input: process.stdin,
@@ -15,23 +15,24 @@ const reader = readline[Symbol.asyncIterator]();
 
 (async function initiate() {
     console.log("Enter username");
-    username = await reader.next();
-    identityKey = await crypto.createKeyPair();
-    preKey = await crypto.createKeyPair();
-    oneTimePreKeys = [];
+    let { value: userr } = await reader.next();
+    myDetails.myUsername = userr;
+    myDetails.myIdentityKey = await crypto.createKeyPair();
+    myDetails.myPreKey = await crypto.createKeyPair();
+    myDetails.myOneTimePreKeys = [];
     for (var i = 0; i < 5; i++) {
-        oneTimePreKeys[i] = await crypto.createKeyPair();
+        myDetails.myOneTimePreKeys[i] = await crypto.createKeyPair();
     }
-    console.log(identityKey.privKey);
-    console.log(helper.ab2str(identityKey.privKey));
-    console.log(helper.str2ab(helper.ab2str(identityKey.privKey)));
-    signOfPreKey = await crypto.Ed25519Sign(identityKey.privKey, preKey.pubKey);
+    myDetails.mySignOfPreKey = await crypto.Ed25519Sign(
+        myDetails.myIdentityKey.privKey,
+        myDetails.myPreKey.pubKey
+    );
 
     try {
         let xx = await crypto.Ed25519Verify(
-            identityKey.pubKey,
-            preKey.pubKey,
-            signOfPreKey
+            myDetails.myIdentityKey.pubKey,
+            myDetails.myPreKey.pubKey,
+            myDetails.mySignOfPreKey
         );
         console.log(xx);
     } catch (e) {
@@ -41,18 +42,18 @@ const reader = readline[Symbol.asyncIterator]();
 
     try {
         let res = await axios.post("http://localhost:3000/init", {
-            username,
+            username: myDetails.myUsername,
             details: {
-                identityKey: helper.ab2str(identityKey.pubKey),
-                preKey: helper.ab2str(preKey.pubKey),
-                preKeySig: helper.ab2str(signOfPreKey),
-                oneTimePrekey: oneTimePreKeys.map((x) =>
+                identityKey: helper.ab2str(myDetails.myIdentityKey.pubKey),
+                preKey: helper.ab2str(myDetails.myPreKey.pubKey),
+                preKeySig: helper.ab2str(myDetails.mySignOfPreKey),
+                oneTimePreKey: myDetails.myOneTimePreKeys.map((x) =>
                     helper.ab2str(x.pubKey)
                 ),
             },
         });
     } catch (e) {
-        console.log(e.name);
+        console.log(e);
     }
 
     let PROMPT = `Choose an option\n1. Get all the messages\n2. Send a message to someone\n3. Exit\n`;
@@ -78,17 +79,23 @@ async function getAllMessages() {
         let res = await axios.post(
             "http://localhost:3000/getAllUnreadMessages",
             {
-                username,
+                username: myDetails.myUsername,
             }
         );
-        for (m in res.body.messages) {
-            if (!messengers[m.username]) {
-                messengers[m.username] = new Messenger();
+        for (m in res.data.messages) {
+            let user = res.data.messages[m];
+            if (!messengers[user.username]) {
+                messengers[user.username] = new messenger.Messenger(
+                    {},
+                    myDetails
+                );
             }
-            await messengers[m.username].receive(m.body);
+            await messengers[(user, myDetails.myUsername)].receive(
+                user.message
+            );
         }
     } catch (e) {
-        console.log(e.name);
+        console.log(e);
     }
 }
 
@@ -103,9 +110,9 @@ async function sendMessage() {
             let res = await axios.post("http://localhost:3000/getDetails", {
                 username: toUser,
             });
-            messengers[toUser] = new Messenger(res.body);
+            messengers[toUser] = new messenger.Messenger(res.data, myDetails);
         } catch (e) {
-            console.log(e.name);
+            console.log(e);
             return;
         }
     }
@@ -114,13 +121,13 @@ async function sendMessage() {
 
     try {
         await axios.post("http://localhost:3000/sendMessage", {
-            username,
+            username: myDetails.myUsername,
             toUser,
             message: encryptedMessage,
         });
         console.log("Sent!");
     } catch (e) {
-        console.log(e.name);
+        console.log(e);
         return;
     }
 }
