@@ -11,6 +11,10 @@ const readline = require("readline").createInterface({
     output: process.stdout,
 });
 
+readline.on("SIGINT", () => {
+    process.exit();
+});
+
 const reader = readline[Symbol.asyncIterator]();
 
 (async function initiate() {
@@ -29,12 +33,11 @@ const reader = readline[Symbol.asyncIterator]();
     );
 
     try {
-        let xx = await crypto.Ed25519Verify(
+        await crypto.Ed25519Verify(
             myDetails.myIdentityKey.pubKey,
             myDetails.myPreKey.pubKey,
             myDetails.mySignOfPreKey
         );
-        console.log(xx);
     } catch (e) {
         console.log(e);
         process.exit();
@@ -44,11 +47,13 @@ const reader = readline[Symbol.asyncIterator]();
         let res = await axios.post("http://localhost:3000/init", {
             username: myDetails.myUsername,
             details: {
-                identityKey: helper.ab2str(myDetails.myIdentityKey.pubKey),
-                preKey: helper.ab2str(myDetails.myPreKey.pubKey),
-                preKeySig: helper.ab2str(myDetails.mySignOfPreKey),
+                identityKey: helper.arrayBufferToBase64(
+                    myDetails.myIdentityKey.pubKey
+                ),
+                preKey: helper.arrayBufferToBase64(myDetails.myPreKey.pubKey),
+                preKeySig: helper.arrayBufferToBase64(myDetails.mySignOfPreKey),
                 oneTimePreKey: myDetails.myOneTimePreKeys.map((x) =>
-                    helper.ab2str(x.pubKey)
+                    helper.arrayBufferToBase64(x.pubKey)
                 ),
             },
         });
@@ -83,16 +88,14 @@ async function getAllMessages() {
             }
         );
         for (m in res.data.messages) {
-            let user = res.data.messages[m];
-            if (!messengers[user.username]) {
-                messengers[user.username] = new messenger.Messenger(
-                    {},
+            let messageObj = res.data.messages[m];
+            if (!messengers[messageObj.username]) {
+                messengers[messageObj.username] = new messenger.Messenger(
+                    messageObj.message,
                     myDetails
                 );
             }
-            await messengers[(user, myDetails.myUsername)].receive(
-                user.message
-            );
+            await messengers[messageObj.username].receive(messageObj.message);
         }
     } catch (e) {
         console.log(e);
@@ -107,10 +110,23 @@ async function sendMessage() {
 
     if (!messengers[toUser]) {
         try {
+            // Get the details(public keys) of the user from the server
             let res = await axios.post("http://localhost:3000/getDetails", {
                 username: toUser,
             });
-            messengers[toUser] = new messenger.Messenger(res.data, myDetails);
+            messengers[toUser] = await new messenger.Messenger(
+                res.data,
+                myDetails
+            );
+            let initialMessage = await messengers[toUser].sendInitialMessage();
+
+            // send the initial message containing the Extended Triple Diffie Hellman parameters
+            await axios.post("http://localhost:3000/sendMessage", {
+                username: myDetails.myUsername,
+                toUser,
+                message: initialMessage,
+            });
+            console.log("Sent!");
         } catch (e) {
             console.log(e);
             return;

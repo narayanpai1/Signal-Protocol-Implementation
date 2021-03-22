@@ -6,21 +6,35 @@ class Messenger {
         for (let prop in userDetails) {
             this[prop] = userDetails[prop];
             if (typeof this[prop] === "string") {
-                this[prop] = helper.str2ab(this[prop]);
+                this[prop] = helper.base64ToArrayBuffer(this[prop]);
             }
         }
         for (let prop in myDetails) {
             this[prop] = myDetails[prop];
         }
         this.initialMessage = true;
-        this.associatedData =
-            helper.ab2str(this.myIdentityKey.pubKey) + this.identityKey;
+        console.log(this.myIdentityKey.pubKey, this.identityKey);
+        this.associatedData = helper.appendBuffer(
+            this.myIdentityKey.pubKey,
+            this.identityKey
+        );
         this.ephemeralKey = "";
         this.key = "";
         this.iv = new Uint8Array(16);
     }
 
-    async sendInitialMessage(message) {
+    async sendInitialMessage() {
+        try {
+            await crypto.Ed25519Verify(
+                this.identityKey,
+                this.preKey,
+                this.preKeySig
+            );
+        } catch (e) {
+            console.log("PreKey signature invalid");
+            process.exit();
+        }
+
         this.initialMessage = false;
         this.ephemeralKey = await crypto.createKeyPair();
         let dh1 = await crypto.ECDHE(this.preKey, this.myIdentityKey.privKey);
@@ -33,40 +47,48 @@ class Messenger {
             this.oneTimePreKey,
             this.ephemeralKey.privKey
         );
-        // console.log(dh1, dh2, dh3, dh4);
+
         this.key = dh1 + dh2 + dh3 + dh4;
         this.key = await crypto.hash(this.key);
         this.key = this.key.slice(0, 32);
-        // console.log("oooi", this.key);
-        let messages = await crypto.encrypt(this.key, message, this.iv);
-        // console.log(messages);
+
+        let initialCipherMessage = await crypto.encrypt(
+            this.key,
+            this.associatedData,
+            this.iv
+        );
+
+        console.log(this.key, initialCipherMessage);
+
         let rv = {
-            identityKey: helper.ab2str(this.myIdentityKey.pubKey),
-            ephemeralKey: helper.ab2str(this.ephemeralKey.pubKey),
-            preKey: helper.ab2str(this.oneTimePreKey),
-            message: helper.ab2str(messages),
+            identityKey: helper.arrayBufferToBase64(this.myIdentityKey.pubKey),
+            ephemeralKey: helper.arrayBufferToBase64(this.ephemeralKey.pubKey),
+            preKey: helper.arrayBufferToBase64(this.oneTimePreKey),
+            message: helper.arrayBufferToBase64(initialCipherMessage),
         };
         return rv;
     }
 
     send(message) {
-        if (this.initialMessage) {
-            return this.sendInitialMessage(message);
-        }
         return message;
     }
 
-    receiveInitialMessage(message) {
+    async receiveInitialMessage(message) {
+        message = helper.toArrayBufferObj(message);
         this.initialMessage = false;
-        console.log(message);
-    }
 
-    async receive(message) {
-        if (this.initialMessage) {
-            return this.receiveInitialMessage(message);
+        // find the onetime key used by the sender and store it in 'otkey' and delete it from the array
+        let otkey;
+        for (let i in this.myOneTimePreKeys) {
+            if (
+                helper.arrayBufferToBase64(message.preKey) ==
+                helper.arrayBufferToBase64(this.myOneTimePreKeys[i].pubKey)
+            ) {
+                otkey = this.myOneTimePreKeys[i];
+                this.myOneTimePreKeys.splice(i, 1);
+            }
         }
-        message = helper.toabObj(message);
-        let otkey = this.myOneTimePreKeys.pop();
+
         let dh1 = await crypto.ECDHE(
             message.identityKey,
             this.myPreKey.privKey
@@ -80,14 +102,36 @@ class Messenger {
             this.myPreKey.privKey
         );
         let dh4 = await crypto.ECDHE(message.ephemeralKey, otkey.privKey);
-        // console.log(dh1, dh2, dh3, dh4);
+
         this.key = dh1 + dh2 + dh3 + dh4;
         this.key = await crypto.hash(this.key);
         this.key = this.key.slice(0, 32);
-        let messages = await crypto.decrypt(this.key, message.message, this.iv);
-        console.log("Decrypted", messages);
-        const textDecoder = new TextDecoder("utf-8");
-        console.log(textDecoder.decode(messages));
+
+        console.log(this.key);
+        let associatedData = await crypto.decrypt(
+            this.key,
+            message.message,
+            this.iv
+        );
+
+        if (
+            helper.arrayBufferToBase64(associatedData) ===
+            helper.arrayBufferToBase64(
+                helper.appendBuffer(
+                    message.identityKey,
+                    this.myIdentityKey.pubKey
+                )
+            )
+        ) {
+            console.log("X3DH successful");
+        }
+    }
+
+    async receive(message) {
+        if (this.initialMessage) {
+            return this.receiveInitialMessage(message);
+        }
+        console.log("Received message", message);
     }
 }
 
