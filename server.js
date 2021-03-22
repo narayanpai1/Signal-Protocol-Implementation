@@ -61,7 +61,6 @@ An initial ciphertext encrypted with some AEAD encryption scheme [4] using AD as
 app.post("/sendMessage", (req, res) => {
     let { body } = req;
     !unsentMessages[body.toUser] && (unsentMessages[body.toUser] = []);
-    console.log(body);
 
     unsentMessages[body.toUser].push({
         username: body.username,
@@ -85,5 +84,5 @@ app.post("/getAllUnreadMessages", (req, res) => {
 });
 
 app.listen(port, () =>
-    console.log(`Hello world app listening on port ${port}!`)
+    console.log(`App listening on port ${port}!`)
 );
