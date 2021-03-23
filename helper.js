@@ -4,6 +4,7 @@ function arrayBufferToBase64(buf) {
         "utf8"
     ).toString("base64");
 }
+
 function base64ToArrayBuffer(str) {
     str = Buffer.from(str, "base64").toString("utf8");
     var buf = new ArrayBuffer(str.length * 2); // 2 bytes for each char
@@ -11,11 +12,12 @@ function base64ToArrayBuffer(str) {
     for (var i = 0, strLen = str.length; i < strLen; i++) {
         bufView[i] = str.charCodeAt(i);
     }
-    return buf;
+    return bufView.buffer;
 }
+
 function toBase64Obj(bufObj) {
     for (let key in bufObj) {
-        if (typeof bufObj[key] === "Object") {
+        if (typeof bufObj[key] === "object") {
             bufObj[key] = arrayBufferToBase64(bufObj[key]);
         }
     }

@@ -23,6 +23,7 @@ const reader = readline[Symbol.asyncIterator]();
     myDetails.myUsername = userr;
     myDetails.myIdentityKey = await crypto.createKeyPair();
     myDetails.myPreKey = await crypto.createKeyPair();
+    myDetails.currDHRatchetKey = await crypto.createKeyPair();
     myDetails.myOneTimePreKeys = [];
     for (var i = 0; i < 5; i++) {
         myDetails.myOneTimePreKeys[i] = await crypto.createKeyPair();
@@ -54,6 +55,9 @@ const reader = readline[Symbol.asyncIterator]();
                 preKeySig: helper.arrayBufferToBase64(myDetails.mySignOfPreKey),
                 oneTimePreKey: myDetails.myOneTimePreKeys.map((x) =>
                     helper.arrayBufferToBase64(x.pubKey)
+                ),
+                currPublicKey: helper.arrayBufferToBase64(
+                    myDetails.currDHRatchetKey.pubKey
                 ),
             },
         });
@@ -95,7 +99,10 @@ async function getAllMessages() {
                     myDetails
                 );
             }
-            await messengers[messageObj.username].receive(messageObj.message);
+            let rawMessage = await messengers[messageObj.username].receive(
+                messageObj.message
+            );
+            console.log(messageObj.username, "sends", rawMessage);
         }
     } catch (e) {
         console.log(e);
@@ -133,17 +140,17 @@ async function sendMessage() {
         }
     }
 
-    let encryptedMessage = await messengers[toUser].send(rawMessage);
+    // let encryptedMessage = await messengers[toUser].send(rawMessage);
 
-    try {
-        await axios.post("http://localhost:3000/sendMessage", {
-            username: myDetails.myUsername,
-            toUser,
-            message: encryptedMessage,
-        });
-        console.log("Sent!");
-    } catch (e) {
-        console.log(e);
-        return;
-    }
+    // try {
+    //     await axios.post("http://localhost:3000/sendMessage", {
+    //         username: myDetails.myUsername,
+    //         toUser,
+    //         message: encryptedMessage,
+    //     });
+    //     console.log("Sent!");
+    // } catch (e) {
+    //     console.log(e);
+    //     return;
+    // }
 }

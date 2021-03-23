@@ -1,5 +1,6 @@
 var crypto = require("crypto").webcrypto;
 var curveCrypto = require("./lib/curve_helper");
+var nodeCrypto = require("crypto");
 
 let sign = function (key, data) {
     return crypto.subtle
@@ -19,6 +20,24 @@ let sign = function (key, data) {
         });
 };
 
+function toArrayBuffer(buf) {
+    var ab = new ArrayBuffer(buf.length);
+    var view = new Uint8Array(ab);
+    for (var i = 0; i < buf.length; ++i) {
+        view[i] = buf[i];
+    }
+    return ab;
+}
+
+function toBuffer(ab) {
+    var buf = Buffer.alloc(ab.byteLength);
+    var view = new Uint8Array(ab);
+    for (var i = 0; i < buf.length; ++i) {
+        buf[i] = view[i];
+    }
+    return buf;
+}
+
 module.exports = {
     getRandomBytes: function (size) {
         var array = new Uint8Array(size);
@@ -26,28 +45,20 @@ module.exports = {
         return array.buffer;
     },
     encrypt: function (key, data, iv) {
-        console.log(key, data, iv);
-        return crypto.subtle
-            .importKey("raw", key, { name: "AES-CBC" }, false, ["encrypt"])
-            .then(function (key) {
-                return crypto.subtle.encrypt(
-                    { name: "AES-CBC", iv: new Uint8Array(iv) },
-                    key,
-                    data
-                );
-            });
+        var cipher = nodeCrypto.createCipher("aes-192-cbc", key);
+        var crypted = Buffer.concat([
+            cipher.update(toBuffer(data)),
+            cipher.final(),
+        ]);
+        return toArrayBuffer(crypted);
     },
     decrypt: function (key, data, iv) {
-        console.log(key, data, iv);
-        return crypto.subtle
-            .importKey("raw", key, { name: "AES-CBC" }, false, ["decrypt"])
-            .then(function (key) {
-                return crypto.subtle.decrypt(
-                    { name: "AES-CBC", iv: new Uint8Array(iv) },
-                    key,
-                    data
-                );
-            });
+        var decipher = nodeCrypto.createDecipher("aes-192-cbc", key);
+        var dec = Buffer.concat([
+            decipher.update(toBuffer(data)),
+            decipher.final(),
+        ]);
+        return toArrayBuffer(dec);
     },
 
     hash: function (data) {
@@ -91,7 +102,7 @@ module.exports = {
         return curveCrypto.Curveasync.Ed25519Verify(pubKey, msg, sig);
     },
     verifyMAC: function (data, key, mac, length) {
-        return this.sign(key, data).then(function (calculated_mac) {
+        return sign(key, data).then(function (calculated_mac) {
             if (
                 mac.byteLength != length ||
                 calculated_mac.byteLength < length
