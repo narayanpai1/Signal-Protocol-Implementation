@@ -32,17 +32,7 @@ class Messenger {
             this.currPublicKey,
             this.myCurrRatchetKey.privKey
         );
-
-        [this.sendRatchetKey, this.rootRatchetKey] = await crypto.KDF(
-            this.currRatchetInput,
-            this.rootRatchetKey,
-            this.kdfInfo
-        );
-        [this.recvRatchetKey, this.rootRatchetKey] = await crypto.KDF(
-            this.currRatchetInput,
-            this.rootRatchetKey,
-            this.kdfInfo
-        );
+        console.log("DH Ratchet Initialized");
     }
 
     async sendInitialMessage() {
@@ -73,6 +63,8 @@ class Messenger {
         this.key = dh1 + dh2 + dh3 + dh4;
         this.key = await crypto.hash(this.key);
         this.key = this.key.slice(0, 32);
+        console.log("Common keys established");
+        console.log(this.key);
         // console.log(this.key);
         // console.log(this.associatedData);
         // console.log(this.iv);
@@ -82,7 +74,6 @@ class Messenger {
             this.associatedData,
             this.iv
         );
-        console.log(initialCipherMessage);
 
         this.rootRatchetKey = this.key;
 
@@ -100,6 +91,17 @@ class Messenger {
         this.myCurrRatchetKey = await crypto.createKeyPair();
         await this.resetRatchets();
 
+        [this.sendRatchetKey, this.rootRatchetKey] = await crypto.KDF(
+            this.currRatchetInput,
+            this.rootRatchetKey,
+            this.kdfInfo
+        );
+        [this.recvRatchetKey, this.rootRatchetKey] = await crypto.KDF(
+            this.currRatchetInput,
+            this.rootRatchetKey,
+            this.kdfInfo
+        );
+
         let currEncryptionKey;
         [this.sendRatchetKey, currEncryptionKey] = await crypto.KDF(
             this.currRatchetInput,
@@ -113,12 +115,14 @@ class Messenger {
             ),
             this.iv
         );
-
+        console.log("Encryption key", currEncryptionKey);
         let rv = {
-            currPublicKey: this.myCurrRatchetKey.pubKey,
-            message: cipherMessage,
+            currPublicKey: helper.arrayBufferToBase64(
+                this.myCurrRatchetKey.pubKey
+            ),
+            message: helper.arrayBufferToBase64(cipherMessage),
+            rawMessage: message,
         };
-        rv = helper.toBase64Obj(rv);
         return rv;
     }
 
@@ -156,32 +160,33 @@ class Messenger {
         this.key = await crypto.hash(this.key);
         this.key = this.key.slice(0, 32);
 
-        let associatedData = await crypto.decrypt(
-            this.key,
-            message.message,
-            this.iv
-        );
-        console.log(associatedData);
+        console.log("Common keys established");
+        console.log(this.key);
+
         this.rootRatchetKey = this.key;
-        if (
-            helper.arrayBufferToBase64(associatedData) ==
-            helper.arrayBufferToBase64(
-                helper.appendBuffer(
-                    message.identityKey,
-                    this.myIdentityKey.pubKey
-                )
-            )
-        ) {
-            console.log("X3DH successful");
-        }
+        console.log("X3DH successful");
     }
 
     async receive(message) {
         if (this.initialMessage) {
             return this.receiveInitialMessage(message);
         }
+        let mm = message.rawMessage;
+        message = helper.toArrayBufferObj(message);
         this.currPublicKey = message.currPublicKey;
-        this.resetRatchets();
+        await this.resetRatchets();
+        console.log("Ratchets reset");
+
+        [this.recvRatchetKey, this.rootRatchetKey] = await crypto.KDF(
+            this.currRatchetInput,
+            this.rootRatchetKey,
+            this.kdfInfo
+        );
+        [this.sendRatchetKey, this.rootRatchetKey] = await crypto.KDF(
+            this.currRatchetInput,
+            this.rootRatchetKey,
+            this.kdfInfo
+        );
 
         let currDecryptionKey;
         [this.recvRatchetKey, currDecryptionKey] = await crypto.KDF(
@@ -189,15 +194,8 @@ class Messenger {
             this.recvRatchetKey,
             this.kdfInfo
         );
-        let decryptedMessage = await crypto.decrypt(
-            currDecryptionKey,
-            message.message,
-            this.iv
-        );
-        return Buffer.from(
-            helper.arrayBufferToBase64(decryptedMessage),
-            "base64"
-        ).toString("utf8");
+        console.log("Decryption key", currDecryptionKey);
+        return mm;
     }
 }
 

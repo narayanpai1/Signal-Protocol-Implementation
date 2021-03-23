@@ -26,7 +26,6 @@ module.exports = {
         return array.buffer;
     },
     encrypt: function (key, data, iv) {
-        console.log(key, data, iv);
         return crypto.subtle
             .importKey("raw", key, { name: "AES-CBC" }, false, ["encrypt"])
             .then(function (key) {
@@ -38,7 +37,6 @@ module.exports = {
             });
     },
     decrypt: function (key, data, iv) {
-        console.log(key, data, iv);
         return crypto.subtle
             .importKey("raw", key, { name: "AES-CBC" }, false, ["decrypt"])
             .then(function (key) {
