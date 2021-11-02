@@ -27,4 +27,5 @@ Follow these steps to use the app
     Firstly, it will require you to set up a username and then gives you a list of choices to perform everytime.
 
 A screenshot of a sample run where two users chat with each other is shown in the following image.
-![image](https://user-images.githubusercontent.com/43881774/139833132-e1339881-dffd-4e0d-8d13-21f467bc6340.png)
+![image](https://user-images.githubusercontent.com/43881774/139839437-b874095f-a9ef-40da-9765-815d5db07dbf.png)
+
